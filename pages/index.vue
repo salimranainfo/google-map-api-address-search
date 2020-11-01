@@ -5,6 +5,7 @@
       :key="index"
       :is="component"
       :types="types"
+      :location-prompt="true"
       @selected-address="selectedAddress"
       @new-address-component="newAddressComponent"
     ></AddressSearch>

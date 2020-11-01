@@ -2,6 +2,7 @@
   <div
     class="flex flex-row items-center flex-wrap w-full relative bg-black text-white p-10 font-display font-semibold"
   >
+    <!-- Select Type Input -->
     <select
       id="selectedType"
       v-model="selectedType"
@@ -18,9 +19,10 @@
       </option>
     </select>
 
+    <!-- Tooltip Icon -->
     <span
       class="absolute left-0 top-0"
-      style="margin-left: 7.5rem; margin-top: 4.3rem"
+      style="margin-left: 7.1rem; margin-top: 3.7rem"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -36,25 +38,37 @@
         />
       </svg>
     </span>
-    <input
-      ref="autocomplete"
-      v-model="inputAddress"
-      type="text"
-      name="address"
-      autocomplete="off"
-      placeholder="Address"
-      class="w-5/12 bg-black border-solid border-b-2 border-white focus:outline-none mr-2 font-display font-semibold"
-      @change="getSearchResult"
-    />
-    <input
-      type="text"
-      name="addNum"
-      autocomplete="off"
-      class="w-2/12 bg-black border-solid border-b-2 border-white focus:outline-none font-display font-semibold"
-    />
+    <!-- Address Input Fields -->
+    <div
+      class="w-64"
+      @mouseleave="addStreetNotoAddress"
+      @mouseenter="removeStreetNoFromAddress"
+    >
+      <input
+        ref="inputAddress"
+        type="text"
+        name="address"
+        autocomplete="off"
+        placeholder="Address"
+        class="bg-black border-solid border-b-2 border-white focus:outline-none mr-2 font-display font-semibold"
+        :class="addressInputWidth"
+        @keyup="getSearchResult($event)"
+      />
+      <input
+        type="text"
+        v-show="showStreetNum"
+        v-model="streetNum"
+        name="addNum"
+        autocomplete="off"
+        class="w-2/12 bg-black border-solid border-b-2 border-white focus:outline-none font-display font-semibold"
+      />
+    </div>
+
+    <!-- Cross and Plus Icons -->
     <button
+      v-if="inputAddress"
       class="absolute left-0 top-0 focus:outline-none"
-      style="margin-left: 24.5rem; margin-top: 2.8rem"
+      style="margin-left: 23.5rem; margin-top: 2.2rem"
       @click="clearAddressInput"
     >
       <svg
@@ -73,7 +87,7 @@
     </button>
     <button
       class="absolute left-0 top-0 focus:outline-none"
-      style="margin-left: 24.8rem; margin-top: 4.2rem"
+      style="margin-left: 24rem; margin-top: 3.6rem"
       @click="newAddressComponent"
     >
       <svg
@@ -91,6 +105,8 @@
         ></path>
       </svg>
     </button>
+
+    <!-- Google Address Suggestions Div -->
     <div
       v-if="addresses.length > 0"
       class="absolute h-32 w-5/12 top-0 left-0 mt-10 p-2 rounded-b-lg text-xs overflow-auto font-display font-semibold scrollbar"
@@ -108,6 +124,8 @@
         </li>
       </ul>
     </div>
+
+    <!-- Google Map is initialized here -->
     <div id="map" style="display: none"></div>
   </div>
 </template>
@@ -121,10 +139,19 @@ export default {
         return ['Residential']
       },
     },
+    locationPrompt: {
+      type: Boolean,
+      default: () => {
+        return false
+      },
+    },
   },
   data() {
     return {
       inputAddress: '',
+      streetNum: '',
+      fullAddress: '',
+      showStreetNum: false,
       selectedType: 'Residential',
       addresses: [],
       map: null,
@@ -133,73 +160,161 @@ export default {
   },
   mounted() {
     if (window.google) {
-      this.map = new window.google.maps.Map(
-        window.document.getElementById('map'),
-        {
-          center: { lat: 23.777176, lng: 90.399452 },
-          zoom: 8,
+      if (this.locationPrompt) {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const pos = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+              }
+
+              this.map = new window.google.maps.Map(
+                window.document.getElementById('map'),
+                {
+                  center: pos,
+                  zoom: 8,
+                }
+              )
+            },
+            (error) => {
+              alert(
+                'Can not get current location. To use address suggestion around you preciously, please enable current location. You can still use address suggestion without enabling current location service.'
+              )
+
+              this.map = new window.google.maps.Map(
+                window.document.getElementById('map'),
+                {
+                  center: {
+                    lat: 23.777176,
+                    lng: 90.399452,
+                  },
+                  zoom: 8,
+                }
+              )
+            }
+          )
+        } else {
+          alert(
+            'This browser or device does not support location service. But you can still use address suggestion service'
+          )
         }
-      )
+      } else {
+        this.map = new window.google.maps.Map(
+          window.document.getElementById('map'),
+          {
+            center: {
+              lat: 23.777176,
+              lng: 90.399452,
+            },
+            zoom: 8,
+          }
+        )
+      }
     }
   },
   methods: {
+    removeStreetNoFromAddress() {
+      if (this.inputAddress) {
+        this.showStreetNum = true
+        this.$refs.inputAddress.value = this.inputAddress
+      }
+    },
+    addStreetNotoAddress() {
+      this.showStreetNum = false
+
+      if (this.inputAddress && this.streetNum) {
+        this.fullAddress = this.streetNum + ' ' + this.inputAddress
+        this.$refs.inputAddress.value = this.fullAddress
+      } else if (this.inputAddress && !this.streetNum) {
+        this.$refs.inputAddress.value = this.inputAddress
+      }
+    },
     newAddressComponent() {
       this.$emit('new-address-component')
     },
     clearAddressInput() {
       this.addresses = []
+      this.$refs.inputAddress.value = ''
       this.inputAddress = ''
+      this.streetNum = ''
+      this.fullAddress = ''
+      this.showStreetNum = false
     },
     selectedAddress(address) {
-      this.inputAddress = ''
+      this.$emit('selected-address', address)
       this.inputAddress = address.formatted_address
-      this.addresses = []
-    },
-    getSearchResult() {
-      this.addresses = []
-      if (window.google) {
-        const placeService = new window.google.maps.places.PlacesService(
-          this.map
-        )
-        const request = {
-          query: this.inputAddress,
-          type: this.selectedType.toLowerCase(),
-        }
-        placeService.textSearch(request, (result, status) => {
-          if (status === 'OK') {
-            result.forEach((address) => {
-              const placeRequest = {
-                placeId: address.place_id,
-                fields: [
-                  'formatted_address',
-                  'address_components',
-                  'geometry.location',
-                ],
-              }
-              placeService.getDetails(
-                placeRequest,
-                (placeResult, placeStatus) => {
-                  if (placeStatus === 'OK') {
-                    const rcvdAddress = {
-                      formatted_address: placeResult.formatted_address,
-                      address_components: placeResult.address_components,
-                      geometry: placeResult.geometry.location,
-                    }
-                    this.addresses.push(rcvdAddress)
-                    console.log(rcvdAddress.formatted_address)
-                  }
-                }
-              )
-            })
+
+      if (address.address_components.length > 0) {
+        address.address_components.forEach((el) => {
+          if (el.types[0] === 'street_number') {
+            this.streetNum = el.short_name
           }
         })
       }
+
+      this.addresses = []
+      this.fullAddress = ''
+      this.$refs.inputAddress.value = this.inputAddress
+      this.showStreetNum = true
+    },
+    getSearchResult(event) {
+      var inp = String.fromCharCode(event.keyCode)
+
+      if (/[a-zA-Z0-9-_ ]/.test(inp)) {
+        this.addresses = []
+        this.inputAddress = this.$refs.inputAddress.value
+
+        if (window.google) {
+          const placeService = new window.google.maps.places.PlacesService(
+            this.map
+          )
+          const request = {
+            query: this.$refs.inputAddress.value,
+            type: this.selectedType.toLowerCase(),
+          }
+
+          placeService.textSearch(request, (result, status) => {
+            if (status === 'OK') {
+              result.forEach((address) => {
+                const placeRequest = {
+                  placeId: address.place_id,
+                  fields: [
+                    'formatted_address',
+                    'address_components',
+                    'geometry.location',
+                  ],
+                }
+
+                placeService.getDetails(
+                  placeRequest,
+                  (placeResult, placeStatus) => {
+                    if (placeStatus === 'OK') {
+                      const rcvdAddress = {
+                        formatted_address: placeResult.formatted_address,
+                        address_components: placeResult.address_components,
+                        geometry: placeResult.geometry.location,
+                      }
+
+                      this.addresses.push(rcvdAddress)
+                    }
+                  }
+                )
+              })
+            }
+          })
+        }
+      }
     },
   },
-  watch() {
-    inputAddress(val) {
-
-    }
+  computed: {
+    addressInputWidth() {
+      if (this.showStreetNum) {
+        return 'w-9/12'
+      } else {
+        return 'w-64'
+      }
+    },
   },
   head() {
     return {
